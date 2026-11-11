@@ -116,13 +116,13 @@ button{font-family:inherit;cursor:pointer;color:inherit}
 .pill.active{border-color:var(--accent);color:var(--accent2);background:#201c3e}
 .booknav .bname{max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:12px}
 .booknav button:disabled{opacity:.35;cursor:default}
-.pop .row2{display:flex;gap:7px;margin-top:9px}
+.pop .row2{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}
+.pop .row2 button{min-width:44%}
 .pop .row2 button{flex:1;background:#20243a;border:1px solid var(--line);border-radius:9px;padding:7px 8px;font-size:12.5px;color:var(--txt)}
 .pop .row2 button:hover{border-color:var(--accent)}
 .stress{position:relative}
 .stress::before{content:"";position:absolute;top:-.46em;right:48%;width:0;height:0;
   border-inline:4px solid transparent;border-bottom:7px solid var(--accent);opacity:.9}
-.breath{color:var(--accent);opacity:.5;font-weight:700;margin:0 2px}
 .placeholder{color:#b9bccb;font-style:normal}
 
 /* read bar */
@@ -311,6 +311,35 @@ body.reading .readbar{display:flex}
 #notePop .edit input{font-family:Heebo,sans-serif;font-size:14px}
 .canvas-wrap{min-height:220px}
 .pane{min-height:280px}
+/* library */
+.libcard{width:min(760px,94vw)}
+.libsub{color:var(--muted);font-size:13.5px;margin:0 0 14px}
+.librow{display:flex;align-items:center;gap:12px;padding:11px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);margin-bottom:8px}
+.librow.cur{border-color:var(--accent);background:#201c3e}
+.libic{font-size:22px}
+.libmain{flex:1;min-width:0}
+.libname{font-weight:600;font-size:15px;color:var(--txt);cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.libname:hover{color:var(--accent2)}
+.libmeta{font-size:12px;color:var(--muted);margin-top:3px}
+.librename{width:100%;background:#12141e;border:1px solid var(--accent);border-radius:8px;color:var(--txt);font:600 15px Heebo,sans-serif;padding:5px 8px;direction:rtl}
+.libacts{display:flex;gap:6px;flex:0 0 auto}
+.libacts button{background:var(--panel);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:7px 11px;font-size:13px}
+.libacts .lopen{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.librow.cur .lopen{background:transparent;color:var(--accent2)}
+.libacts button:hover{border-color:var(--accent)}
+.libacts .ldel.arm{background:#b91c1c;border-color:#b91c1c;color:#fff;font-weight:600}
+.libempty{color:var(--muted);text-align:center;padding:26px 10px;border:1px dashed var(--line);border-radius:12px}
+.libbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px}
+.libbar button{background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--txt);padding:9px 14px;font-size:13.5px}
+.libbar button:hover{border-color:var(--accent)}
+#libFoot{font-size:12px;color:var(--dim)}
+.breath{cursor:pointer;user-select:none;margin:0 .16em;font-family:Heebo,sans-serif;font-weight:700}
+.breath.auto{color:var(--accent);opacity:.45;font-weight:500}
+.breath.man{color:#0d9488}
+.breath:hover{opacity:1;filter:brightness(.85)}
+.ve{position:relative}
+.ve::after{content:"v";position:absolute;left:50%;transform:translateX(-50%);bottom:var(--veb,-.06em);
+  font:700 .44em/1 Heebo,Arial,sans-serif;color:inherit;pointer-events:none}
 </style>
 </head>
 <body>
@@ -355,10 +384,12 @@ body.reading .readbar{display:flex}
         <div class="sec-title">🔎 מקרא הסימונים</div>
         <div class="lg"><span class="lgk"><span class="w risk">מִלָה</span></span><span>מילה <b>קריטית</b> — קל לטעות בה: מלעיל, קמץ קטן (נהגה O) או שווא נע (נהגה e). ריחוף עם העכבר מראה למה.</span></div>
         <div class="lg"><span class="lgk"><span class="stress">שֶׁ</span>מֶשׁ</span><span>▲ מעל אות = <b>ההברה המוטעמת</b> במילה שהטעמתה מלעיל (לא בהברה האחרונה).</span></div>
+        <div class="lg"><span class="lgk"><span class="ve">מ</span>לך</span><span><b>v מתחת לאות</b> = תנועת E (במקום סגול / צירה). אפשר לכבות ב״כללי השיטה״.</span></div>
         <div class="lg"><span class="lgk">בֶּ / בַּ</span><span><b>תחילית</b> ב־, כ־, ל־ מנוקדת תמיד: <b>לֶ</b>ספר = for a book, <b>לַ</b>ספר = to the book.</span></div>
         <div class="lg"><span class="lgk"><span class="w edited">מילה</span></span><span>קו מנוקד = תיקנת ידנית. לחיצה על כל מילה פותחת בחירת הגייה ועריכה.</span></div>
         <div class="lg"><span class="lgk"><span class="w bm">מילה</span></span><span>🔖 = כאן הפסקת להקריא.</span></div>
         <div class="lg"><span class="lgk"><span class="w nt" style="--nc:#3b82f6">מילה</span></span><span>🎙 <b>הנחיה לקריין</b> — גרור עם העכבר על כמה מילים (או לחץ על מילה ← ״הנחיה לקריין״). התווית מופיעה בשוליים.</span></div>
+        <div class="lg"><span class="lgk"><span style="color:#0d9488;font-weight:700;font-family:Heebo">/ //</span></span><span>🌬 <b>נשימה</b> שסימנת (/ רגילה, // ארוכה): <b>Alt+לחיצה</b> על מילה, או לחיצה על מילה ← ״נשימה אחרי המילה״. לחיצה על הסימן משנה / מסירה. ⁞ = הצעה אוטומטית אחרי פיסוק (״ניהול נשימות״).</span></div>
       </div>
 
       <div class="sec">
@@ -378,11 +409,11 @@ body.reading .readbar{display:flex}
       <div class="toolbar">
         <button class="tbtn convert" id="btnConvert">✦ המר לטקסט לקריינים</button>
         <button class="tbtn ghost" id="btnClean">🧹 נקה</button>
-        <button class="tbtn icon ghost" id="btnTrash" title="מחק הכל">🗑</button>
+        <button class="tbtn icon ghost" id="btnTrash" title="סגור את המסמך (הוא נשאר שמור בספרייה)">✕</button>
         <button class="tbtn icon ghost" id="btnUndo" title="בטל">↶</button>
         <button class="tbtn icon ghost" id="btnRedo" title="בצע שוב">↷</button>
         <button class="tbtn" id="btnImport">⇪ ייבוא PDF / TXT</button>
-        <button class="tbtn" id="btnOpen" style="display:none">📁 פתיחה</button>
+        <button class="tbtn" id="btnOpen" title="כל הקבצים והטקסטים שעבדת עליהם">📚 הספרייה שלי<span id="libCount"></span></button>
         <button class="tbtn" id="btnSave">💾 שמירה</button>
         <input type="file" id="fileTxt" accept=".txt,.pdf,text/plain,application/pdf" hidden>
       </div>
@@ -424,7 +455,7 @@ body.reading .readbar{display:flex}
           <button class="step" id="fsReset" title="התאם לרוחב" style="width:auto;padding:0 8px;font-size:12px">התאם</button></div>
         <div class="pill"><span>עקוב אחרי קריאה</span><span class="sw on" id="swFollow"></span></div>
         <div class="spacer"></div>
-        <button class="pill" id="btnBreath">≋ ניהול נשימות</button>
+        <button class="pill" id="btnBreath" title="הצג הצעות נשימה אחרי סימני פיסוק. נשימה משלך: Alt+לחיצה על מילה, או לחיצה על מילה ← ״נשימה אחרי המילה״">≋ ניהול נשימות</button>
         <button class="pill" id="btnNotes" title="הצג / הסתר את ההנחיות שסימנת">🎙 הנחיות</button>
         <button class="pill" id="btnCrit">🎨 הדגשת קריטי</button>
       </div>
@@ -479,6 +510,7 @@ body.reading .readbar{display:flex}
   <div class="vowels" id="popVowels"></div>
   <div class="edit"><input id="popInput" dir="rtl" title="אפשר גם להקליד ניקוד ידנית"><button id="popApply">החל</button></div>
   <div class="row2">
+    <button id="popBreath">🌬 נשימה אחרי המילה</button>
     <button id="popNote">🎙 הנחיה לקריין</button>
     <button id="popMark">🔖 הפסקתי כאן</button>
     <button id="popReset">↺ חזרה לניקוד האוטומטי</button>
@@ -494,6 +526,17 @@ body.reading .readbar{display:flex}
     <button id="noteSave" style="background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600">שמור הנחיה</button>
     <button id="noteDel">🗑 מחק</button>
     <button id="noteCancel">ביטול</button>
+  </div>
+</div>
+
+<!-- library -->
+<div class="modal" id="libModal">
+  <div class="card libcard">
+    <button class="x" id="libClose">✕ סגור</button>
+    <h2>📚 הספרייה שלי</h2>
+    <p class="libsub">כל קובץ שייבאת וכל טקסט שהמרת נשמרים כאן — עם הניקוד, התיקונים, ההנחיות והמקום שבו עצרת.</p>
+    <div id="libList"></div>
+    <div class="libbar"><button id="libImport">⇪ ייבוא PDF / TXT חדש</button><span id="libFoot"></span></div>
   </div>
 </div>
 

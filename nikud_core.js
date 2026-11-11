@@ -15,7 +15,8 @@ const BKP=new Set(['ב','כ','פ','ך','ף']);
 const GUTTURAL='אהחער';
 
 export const DEFAULT_OPTS={ unify_vowels:true, unify_a:false, shva_nach_remove:true, shva_na_segol:true,
-  kamatz_katan:true, dagesh_bkp_only:true, stress_marks:true, initial_shva_na:false };
+  kamatz_katan:true, dagesh_bkp_only:true, stress_marks:true, initial_shva_na:false,
+  e_as_v:true };   // display only: every "e" vowel is drawn as a small v under the letter
 
 export const isLetter=c=>{ const o=c.codePointAt(0); return o>=0x05D0&&o<=0x05EA; };
 export const isMark=c=>{ const o=c.codePointAt(0); return (o>=0x0591&&o<=0x05BD)||o===0x05BF||o===0x05C1||o===0x05C2||o===0x05C4||o===0x05C5||o===0x05C7; };

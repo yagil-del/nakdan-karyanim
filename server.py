@@ -36,6 +36,19 @@ PASSWORD = os.environ.get('NAKDAN_PASSWORD', '')        # optional HTTP Basic Au
 MAX_CHARS = 16000      # per nikud call; the textarea is editable so users pick a section
 
 
+def _build():
+    """short fingerprint of the client files, to tell which version is deployed"""
+    import hashlib
+    h = hashlib.sha1()
+    for name in ('app.js', 'nikud_core.js', 'index.html'):
+        try:
+            with open(os.path.join(HERE, name), 'rb') as f:
+                h.update(f.read())
+        except OSError:
+            pass
+    return h.hexdigest()[:8]
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send(self, code, body, ctype='application/json; charset=utf-8'):
         if isinstance(body, (dict, list)):
@@ -81,7 +94,7 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split('?', 1)[0]
         if path == '/health':
             ready = getattr(E, 'model_ready', lambda: True)()
-            return self._send(200, {'ok': True, 'engine': ENGINE, 'model_ready': ready})
+            return self._send(200, {'ok': True, 'engine': ENGINE, 'model_ready': ready, 'build': _build()})
         if not self._authorized():
             return
         if path in ('/', '/index.html'):

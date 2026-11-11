@@ -6,7 +6,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 /* ------------------------------------------------------------------ storage */
 ['nikud-karyanim', 'nikud-book', 'nikud-edits', 'nikud-progress'].forEach(k => { try { localStorage.removeItem(k); } catch {} }); // old versions
-const LSK = { state: 'nk2-state', edits: 'nk2-edits', prog: 'nk2-progress', notes: 'nk2-notes' };
+const LSK = { state: 'nk2-state', edits: 'nk2-edits', prog: 'nk2-progress', notes: 'nk2-notes', breaths: 'nk2-breaths' };
 const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
 const idb = (() => {
@@ -28,7 +28,7 @@ const idb = (() => {
 /* -------------------------------------------------------------------- state */
 const state = {
   tab: 'narr', density: 'medium', opts: { ...N.DEFAULT_OPTS },
-  zoomE: 1, zoomR: 1, lh: 195, follow: true, breath: false, crit: true, notes: true, speed: 35, page: 1, input: '',
+  zoomE: 1, zoomR: 1, lh: 195, follow: true, breath: false, crit: true, notes: true, speed: 35, page: 1, input: '', cur: '',
 };
 let DOC = null;                    // {uid,name,kind:'pdf'|'text',count,first,chapters,pages,ff}
 const TOK = new Map();             // page -> [[token,...] per line]
@@ -48,14 +48,26 @@ let busyN = 0;
 function showBusy(b) { busyN = Math.max(0, busyN + (b ? 1 : -1)); $('#busy').style.display = busyN ? 'grid' : 'none'; }
 const escapeH = s => s.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]));
 function hash(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
-function wordHTML(str, stressIdx) {
-  if (stressIdx == null || stressIdx < 0 || !state.opts.stress_marks) return escapeH(str);
-  let out = '', ui = -1, open = false;
+const E_MARKS = /[\u05B1\u05B5\u05B6]/g;          // chataf-segol, tsere, segol  (the "e" vowels)
+const evOn = mode => mode === 'narr' && !!state.opts.e_as_v;
+function wordHTML(str, stressIdx, ev) {      // ev: draw every "e" vowel as a small v under its letter
+  const st = stressIdx != null && stressIdx >= 0 && state.opts.stress_marks;
+  if (!st && !ev) return escapeH(str);
+  let out = '', ui = -1, cur = null;
+  const flush = () => {
+    if (!cur) return;
+    const cls = []; let t = cur.t;
+    if (ev && t.search(E_MARKS) >= 0) { t = t.replace(E_MARKS, ''); cls.push('ve'); }
+    if (st && cur.u === stressIdx) cls.push('stress');
+    out += cls.length ? `<span class="${cls.join(' ')}">${escapeH(t)}</span>` : escapeH(t);
+    cur = null;
+  };
   for (const c of str) {
-    if (N.isLetter(c)) { ui++; if (open) { out += '</span>'; open = false; } if (ui === stressIdx) { out += '<span class="stress">'; open = true; } }
-    out += escapeH(c);
+    if (N.isLetter(c)) { flush(); cur = { t: c, u: ++ui }; }
+    else if (N.isMark(c) && cur) cur.t += c;
+    else { flush(); out += escapeH(c); }
   }
-  if (open) out += '</span>';
+  flush();
   return out;
 }
 
@@ -104,6 +116,34 @@ function putNote(p, n) {                      // add or replace
   arr.push(n); arr.sort((x, y) => x.a.l - y.a.l || x.a.i - y.a.i); lsSet(LSK.notes, NOTES); refreshPage(p);
 }
 function dropNote(p, id) { const d = docKey(); if (NOTES[d] && NOTES[d][p]) { NOTES[d][p] = NOTES[d][p].filter(x => x.id !== id); lsSet(LSK.notes, NOTES); refreshPage(p); } }
+
+/* ------------------------------------------------------------- breath marks */
+// value per word (the mark is drawn after it): 1 = breath "/", 2 = long breath "//", 0 = hide the automatic suggestion
+let BREATHS = lsGet(LSK.breaths, {});
+const PUNCT = /[.,;:!?…]/;
+const breathOf = (p, l, i) => { const v = ((BREATHS[docKey()] || {})[p] || {})[l + ':' + i]; return v === undefined ? null : v; };
+function setBreath(p, l, i, v) {
+  const d = docKey(); BREATHS[d] = BREATHS[d] || {}; BREATHS[d][p] = BREATHS[d][p] || {};
+  if (v === null) delete BREATHS[d][p][l + ':' + i]; else BREATHS[d][p][l + ':' + i] = v;
+  lsSet(LSK.breaths, BREATHS); refreshPage(p);
+}
+const punctAfter = (p, l, i) => { const lt = (TOK.get(p) || [])[l], nx = lt && lt[i + 1]; return !!(nx && nx.s != null && PUNCT.test(nx.s)); };
+function cycleBreath(p, l, i, fromMark) {       // none → / → // → none   (clicking an automatic mark hides it)
+  const cur = breathOf(p, l, i), auto = state.breath && punctAfter(p, l, i);
+  let next;
+  if (cur === 1) next = 2;
+  else if (cur === 2) next = auto ? 0 : null;
+  else if (cur === null && fromMark) next = 0;
+  else next = 1;
+  setBreath(p, l, i, next);
+  return next;
+}
+function breathEl(kind, wi) {
+  const b = document.createElement('span'); b.className = 'breath ' + (kind === 'auto' ? 'auto' : 'man'); b.dataset.w = wi;
+  b.textContent = kind === 'auto' ? '⁞' : (kind === 2 ? '//' : '/');
+  b.title = kind === 'auto' ? 'הצעת נשימה (לחיצה מסתירה)' : (kind === 2 ? 'נשימה ארוכה (לחיצה מסירה)' : 'נשימה (לחיצה: ארוכה)');
+  return b;
+}
 
 /* ------------------------------------------------- what a word looks like */
 function display(tok, e, mode) {
@@ -194,10 +234,15 @@ class View {
       else lt.forEach((tk, ti) => {
         if (tk.s != null) {
           host.appendChild(document.createTextNode(tk.s));
-          if (state.breath && mode === 'narr' && /[.,;:!?…]/.test(tk.s)) { const b = document.createElement('span'); b.className = 'breath'; b.textContent = '⁞'; host.appendChild(b); }
+          const pw = ti > 0 && lt[ti - 1].o ? ti - 1 : -1;            // the word this separator follows
+          if (pw >= 0) {
+            const m = breathOf(i, li, pw);
+            if (m) host.appendChild(breathEl(m, pw));
+            else if (m === null && state.breath && mode === 'narr' && PUNCT.test(tk.s)) host.appendChild(breathEl('auto', pw));
+          }
           return;
         }
-        const e = editOf(i, li, ti), d = display(tk, e, mode);
+        const e0 = editOf(i, li, ti), e = (e0 && e0.o && e0.o !== tk.o) ? null : e0, d = display(tk, e, mode);
         const sp = document.createElement('span');
         sp.className = 'w' + (mode === 'narr' && state.crit && d.rs.length ? ' risk' : '') + (e ? ' edited' : '')
           + (bm && bm.page === i && bm.l === li && bm.i === ti ? ' bm' : '');
@@ -205,8 +250,9 @@ class View {
         const nn = notes.filter(n => inNote(n, li, ti));
         if (nn.length) { const n = nn[nn.length - 1]; sp.classList.add('nt'); sp.style.setProperty('--nc', preset(n.k).c); sp.dataset.n = n.id; sp.title = nn.map(noteLabel).join(' · '); }
         if (d.rs.length && mode === 'narr') sp.title = d.rs.join(' · ');
-        sp.innerHTML = wordHTML(d.s, d.stress);
+        sp.innerHTML = wordHTML(d.s, d.stress, evOn(mode));
         host.appendChild(sp);
+        if (!(lt[ti + 1] && lt[ti + 1].s != null)) { const m = breathOf(i, li, ti); if (m) host.appendChild(breathEl(m, ti)); }   // end of line
         notes.forEach(n => { if (n.k === 'pause' && n.b.l === li && n.b.i === ti) { const b = document.createElement('span'); b.className = 'ntp'; b.textContent = '‖'; b.style.setProperty('--nc', preset(n.k).c); host.appendChild(b); } });
       });
       frag.appendChild(el);
@@ -309,8 +355,100 @@ async function pump() {
 function onViewScroll(v) {
   if (!DOC || v !== activeView()) return;
   const p = v.current();
-  if (p !== state.page) { state.page = p; updateNavUI(); saveState(); [p + 1, p + 2, p - 1].forEach(requestNikud); }
+  if (p !== state.page) { state.page = p; const le = libEntry(state.cur); if (le) { le.page = p; libSaveSoon(); } updateNavUI(); saveState(); [p + 1, p + 2, p - 1].forEach(requestNikud); }
 }
+
+/* ------------------------------------------------------------------ library */
+// Every document that was imported / converted stays here until the user deletes it.
+let LIB = [];                       // [{uid,key,name,title,kind,count,added,opened,page}]
+let libT = null;
+const libSave = () => idb.set('lib', LIB);
+const libSaveSoon = () => { clearTimeout(libT); libT = setTimeout(libSave, 600); };
+const libEntry = uid => LIB.find(e => e.uid === uid);
+const keyOfDoc = d => d.kind === 'pdf' ? 'pdf:' + d.name : 'text:' + d.sig;
+const docTitle = () => { const e = DOC && libEntry(DOC.uid); return (e && e.title) || (DOC ? DOC.name : ''); };
+const autoName = text => { const t = text.replace(/\s+/g, ' ').trim(); return t.length > 34 ? t.slice(0, 32) + '…' : t; };
+function updateLibBtn() { $('#libCount').textContent = LIB.length ? ` (${LIB.length})` : ''; }
+function libTouch(uid) { const e = libEntry(uid); if (e) { e.opened = Date.now(); libSaveSoon(); } }
+function dropMarks(key) {            // edits, directions and bookmark of one document
+  delete EDITS[key]; lsSet(LSK.edits, EDITS);
+  delete NOTES[key]; lsSet(LSK.notes, NOTES);
+  const pr = lsGet(LSK.prog, {}); delete pr[key]; lsSet(LSK.prog, pr);
+  delete BREATHS[key]; lsSet(LSK.breaths, BREATHS);
+}
+async function libPurge(uid, withMarks) {
+  const e = libEntry(uid); LIB = LIB.filter(x => x.uid !== uid);
+  await idb.del('doc:' + uid); await idb.delPrefix('tok:' + uid + ':');
+  if (withMarks && e) dropMarks(e.key);
+  await libSave(); updateLibBtn();
+}
+async function libAdd(doc, replaceUid) {
+  const key = keyOfDoc(doc);
+  const old = libEntry(doc.uid) || LIB.find(e => e.key === key) || libEntry(replaceUid);
+  const keep = old ? { title: old.title, added: old.added, page: old.key === key ? old.page : 0 } : {};
+  for (const e of LIB.filter(e => e.uid !== doc.uid && (e.key === key || e.uid === replaceUid))) await libPurge(e.uid, e.key !== key);
+  LIB = LIB.filter(e => e.uid !== doc.uid);
+  LIB.push({ uid: doc.uid, key, name: doc.name, title: keep.title || '', kind: doc.kind, count: doc.count,
+    added: keep.added || Date.now(), opened: Date.now(), page: keep.page || 0 });
+  await idb.set('doc:' + doc.uid, doc); await libSave(); updateLibBtn();
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+}
+async function openFromLib(uid) {
+  const e = libEntry(uid); if (!e) return;
+  const doc = await idb.get('doc:' + uid);
+  if (!doc || !doc.pages) { await libPurge(uid, false); renderLibrary(); return toast('המסמך הזה כבר לא שמור בדפדפן — ייבא אותו מחדש'); }
+  closeLibrary();
+  $('#inputArea').value = doc.kind === 'text' ? (doc.src || doc.pages.flatMap(pg => pg.lines.map(l => l.t)).join('\n')) : '';
+  await setDoc(doc, { restored: true, tab: 'narr', page: e.page || 0 });
+  toast('נפתח: ' + (e.title || e.name));
+}
+async function deleteFromLib(uid) {
+  if (DOC && DOC.uid === uid) { closeDoc(); $('#inputArea').value = ''; }
+  await libPurge(uid, true); saveState(); renderLibrary();
+}
+const countMarks = (obj, key) => Object.values(obj[key] || {}).reduce((n, pg) => n + (Array.isArray(pg) ? pg.length : Object.keys(pg).length), 0);
+function renderLibrary() {
+  const box = $('#libList'); box.innerHTML = '';
+  const prog = lsGet(LSK.prog, {});
+  if (!LIB.length) box.innerHTML = '<div class="libempty">הספרייה ריקה. כל קובץ שתייבא, וכל טקסט שתמיר, יישמר כאן אוטומטית.</div>';
+  [...LIB].sort((a, b) => (b.opened || 0) - (a.opened || 0)).forEach(e => {
+    const row = document.createElement('div'); row.className = 'librow' + (DOC && DOC.uid === e.uid ? ' cur' : ''); row.dataset.uid = e.uid;
+    const bits = [e.count > 1 ? `${e.count} עמ׳` : 'עמוד אחד'];
+    if (e.count > 1 && e.page) bits.push(`נעצרת בעמ׳ ${e.page}`);
+    if (prog[e.key]) bits.push(`🔖 עמ׳ ${prog[e.key].page}`);
+    const ne = countMarks(EDITS, e.key), nn = countMarks(NOTES, e.key);
+    const nb = Object.values(BREATHS[e.key] || {}).reduce((n, pg) => n + Object.values(pg).filter(Boolean).length, 0);
+    if (nn) bits.push(`🎙 ${nn} הנחיות`); if (nb) bits.push(`🌬 ${nb} נשימות`); if (ne) bits.push(`✏️ ${ne} תיקונים`);
+    bits.push('נפתח ' + new Date(e.opened || e.added).toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric', year: '2-digit' }));
+    row.innerHTML = `<div class="libic">${e.kind === 'pdf' ? '📕' : '📝'}</div>
+      <div class="libmain"><div class="libname"></div><div class="libmeta"></div></div>
+      <div class="libacts"><button class="lopen">${DOC && DOC.uid === e.uid ? 'פתוח עכשיו' : 'פתח'}</button><button class="lren" title="שנה שם">✏️</button><button class="ldel" title="מחק מהספרייה">🗑</button></div>`;
+    row.querySelector('.libname').textContent = e.title || e.name;
+    row.querySelector('.libmeta').textContent = bits.join(' · ');
+    row.querySelector('.lopen').onclick = () => (DOC && DOC.uid === e.uid) ? closeLibrary() : openFromLib(e.uid);
+    row.querySelector('.libname').onclick = row.querySelector('.lopen').onclick;
+    row.querySelector('.lren').onclick = () => {
+      const nm = row.querySelector('.libname'), inp = document.createElement('input');
+      inp.className = 'librename'; inp.value = e.title || e.name; nm.replaceWith(inp); inp.focus(); inp.select();
+      const done = ok => { if (ok && inp.value.trim()) { e.title = inp.value.trim(); libSave(); if (DOC && DOC.uid === e.uid) fillBookNav(); } renderLibrary(); };
+      inp.onkeydown = ev => { if (ev.key === 'Enter') done(true); else if (ev.key === 'Escape') { ev.stopPropagation(); done(false); } };
+      inp.onblur = () => done(true);
+    };
+    const del = row.querySelector('.ldel');
+    del.onclick = () => {
+      if (del.dataset.arm) return deleteFromLib(e.uid);
+      del.dataset.arm = '1'; del.classList.add('arm'); del.textContent = 'למחוק?';
+      setTimeout(() => { if (del.isConnected) { delete del.dataset.arm; del.classList.remove('arm'); del.textContent = '🗑'; } }, 3500);
+    };
+    box.appendChild(row);
+  });
+  $('#libFoot').textContent = 'המסמכים נשמרים בדפדפן הזה, במחשב הזה.';
+  if (navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(q => {
+    if (q && q.usage) $('#libFoot').textContent = `המסמכים נשמרים בדפדפן הזה, במחשב הזה · בשימוש ${(q.usage / 1048576).toFixed(1)}MB`;
+  }).catch(() => {});
+}
+function openLibrary() { hidePop(); renderLibrary(); $('#libModal').style.display = 'flex'; }
+function closeLibrary() { $('#libModal').style.display = 'none'; }
 
 /* ------------------------------------------------------------ document setup */
 function textDoc(text, name) {
@@ -322,7 +460,7 @@ function textDoc(text, name) {
     for (const q of parts) { if (len + q.length > 1700) push(); cur.push(q); len += q.length; }
   }
   push();
-  return { uid: 'text:' + hash(text) + ':' + text.length, sig: hash(text) + text.length, name, kind: 'text', count: pages.length, first: 1, chapters: [], pages, ff: 1 };
+  return { uid: 'text:' + hash(text) + ':' + text.length, sig: hash(text) + text.length, name, src: text, kind: 'text', count: pages.length, first: 1, chapters: [], pages, ff: 1 };
 }
 async function fontFactor(doc) {                // match the book's line widths with our typeface
   try { await document.fonts.load('500 20px "Frank Ruhl Libre"'); } catch {}
@@ -340,7 +478,8 @@ async function fontFactor(doc) {                // match the book's line widths 
 }
 async function setDoc(doc, opts = {}) {
   docGen++; DOC = doc; TOK.clear(); PENDING.clear(); UNDO.length = REDO.length = 0;
-  if (!opts.restored) { await idb.delPrefix('tok:'); idb.set('doc', doc); }
+  if (!opts.restored) await libAdd(doc, opts.replace);
+  state.cur = doc.uid; libTouch(doc.uid);
   fillBookNav();
   $('#canvasWrap').classList.add('docmode');
   edView.build(); if (readerOpen) rdView.build();
@@ -357,7 +496,7 @@ async function setDoc(doc, opts = {}) {
 }
 function closeDoc() {
   docGen++; DOC = null; TOK.clear(); PENDING.clear();
-  idb.del('doc'); idb.delPrefix('tok:');
+  state.cur = '';                        // the document itself stays in the library
   $('#bookNav').style.display = 'none'; $('#rPage').textContent = '';
   $('#canvasWrap').classList.remove('docmode');
   edView.build(); rdView.build(); showTab('orig');
@@ -368,7 +507,7 @@ function fillBookNav() {
   const multi = DOC && DOC.count > 1;
   $('#bookNav').style.display = DOC ? 'flex' : 'none';
   if (!DOC) return;
-  $('#bookName').textContent = DOC.name; $('#bookName').title = DOC.name;
+  $('#bookName').textContent = docTitle(); $('#bookName').title = DOC.name;
   $('#pgTotal').textContent = '/ ' + DOC.count; $('#pgInput').max = DOC.count;
   document.querySelectorAll('#bookNav .pgctrl').forEach(e => e.style.display = multi ? 'flex' : 'none');
   const sel = $('#chapSel'); sel.innerHTML = '<option value="">פרקים…</option>';
@@ -421,18 +560,28 @@ async function convert(tab) {
   if (DOC && DOC.kind === 'pdf') { showTab(typeof tab === 'string' ? tab : 'narr'); return toast('בספר הניקוד אוטומטי — פשוט גוללים'); }
   const text = $('#inputArea').value.trim();
   if (!text) return toast('אין טקסט לנקד — הדבק טקסט או ייבא קובץ');
-  const d = textDoc(text, (DOC && DOC.kind === 'text' && DOC.name) || 'טקסט מודבק');
+  let prev = DOC && DOC.kind === 'text' ? DOC : null;
+  if (prev && prev.src) {                 // same document, edited?  (shared start+end ≥ half of the shorter text)
+    const a = prev.src, n = Math.min(a.length, text.length); let i = 0, j = 0;
+    while (i < n && a[i] === text[i]) i++;
+    while (j < n - i && a[a.length - 1 - j] === text[text.length - 1 - j]) j++;
+    if (i + j < n * 0.5) prev = null;
+  }
+  const d = textDoc(text, prev ? prev.name : autoName(text));
   if (DOC && DOC.uid === d.uid) return showTab(typeof tab === 'string' ? tab : 'narr');
-  await setDoc(d, { tab: typeof tab === 'string' ? tab : 'narr' });
+  await setDoc(d, { tab: typeof tab === 'string' ? tab : 'narr', replace: prev ? prev.uid : null });
 }
 
 /* ------------------------------------------------------------------ toolbar */
 $('#btnConvert').onclick = () => convert();
 $('#btnClean').onclick = () => showTab('orig');
-$('#btnTrash').onclick = () => { closeDoc(); $('#inputArea').value = ''; saveState(); };
+$('#btnTrash').onclick = () => { const had = !!DOC; closeDoc(); $('#inputArea').value = ''; saveState(); if (had) toast('המסמך נסגר — הוא שמור ב״ספרייה שלי״'); };
 $('#btnUndo').onclick = undo; $('#btnRedo').onclick = redo;
 $('#btnImport').onclick = () => $('#fileTxt').click();
-$('#btnOpen').onclick = () => $('#fileTxt').click();
+$('#btnOpen').onclick = openLibrary;
+$('#libClose').onclick = closeLibrary;
+$('#libImport').onclick = () => { closeLibrary(); $('#fileTxt').click(); };
+$('#libModal').addEventListener('click', e => { if (e.target === $('#libModal')) closeLibrary(); });
 $('#btnSave').onclick = exportDoc;
 $('#fileTxt').onchange = async e => {
   const f = e.target.files[0]; if (!f) return; e.target.value = '';
@@ -464,7 +613,7 @@ function exportDoc() {
   DOC.pages.forEach(pg => {
     const toks = TOK.get(pg.i); if (!toks) return; n++;
     if (DOC.count > 1) out.push(`— עמוד ${pg.i} —`);
-    toks.forEach((lt, li) => out.push(lt.map((tk, ti) => tk.s != null ? tk.s : display(tk, editOf(pg.i, li, ti), 'narr').s).join('')));
+    toks.forEach((lt, li) => out.push(lt.map((tk, ti) => { if (tk.s != null) return tk.s; const m = breathOf(pg.i, li, ti); return display(tk, editOf(pg.i, li, ti), 'narr').s + (m ? (m === 2 ? ' //' : ' /') : ''); }).join('')));
     out.push('');
   });
   download(DOC.name.replace(/\.[^.]+$/, '') + '-מנוקד.txt', out.join('\n'));
@@ -480,6 +629,7 @@ const TOGGLES = [
   ['kamatz_katan', 'קמץ קטן → חולם (כֹּל)'],
   ['dagesh_bkp_only', 'דגש רק ב-ב, כ, פ'],
   ['__shin', 'הבחנת שׁ / שׂ'],
+  ['e_as_v', 'תנועת E (סגול / צירה) מסומנת ב-v'],
   ['stress_marks', 'סימון הטעמה ▲ (מלעיל)'],
 ];
 function buildToggles() {
@@ -515,7 +665,7 @@ function applySwitches() {
   $('#btnNotes').classList.toggle('active', state.notes);
 }
 $('#swFollow').onclick = () => { state.follow = !state.follow; applySwitches(); saveState(); };
-$('#btnBreath').onclick = () => { state.breath = !state.breath; applySwitches(); refreshAll(); saveState(); };
+$('#btnBreath').onclick = () => { state.breath = !state.breath; if (state.breath) toast('הצעות נשימה מוצגות אחרי סימני פיסוק · נשימה משלך: Alt+לחיצה על מילה, או לחיצה על מילה ← ״נשימה״', 5200); applySwitches(); refreshAll(); saveState(); };
 $('#btnCrit').onclick = () => { state.crit = !state.crit; applySwitches(); refreshAll(); saveState(); };
 $('#lhRange').oninput = e => { state.lh = +e.target.value; refreshAll(); saveState(); };
 $('#fsUp').onclick = () => edView.zoomBy(1.12); $('#fsDown').onclick = () => edView.zoomBy(1 / 1.12);
@@ -540,7 +690,7 @@ function drawPop() {
   const box = $('#popAlts'); box.innerHTML = '';
   const add = (v, tag, hint, cur) => {
     const b = document.createElement('button'); b.className = 'alt' + (cur ? ' cur' : '');
-    b.innerHTML = `<span class="big">${escapeH(popShow(v))}</span><small>${escapeH(tag)}${hint ? ' · <i>' + escapeH(hint) + '</i>' : ''}</small>`;
+    b.innerHTML = `<span class="big">${wordHTML(popShow(v), -1, evOn(popMode()))}</span><small>${escapeH(tag)}${hint ? ' · <i>' + escapeH(hint) + '</i>' : ''}</small>`;
     b.onclick = () => { pop.v = v; saveFromPop({ v }); };
     box.appendChild(b);
   };
@@ -575,6 +725,8 @@ function drawPop() {
   $('#popInput').value = (e && (popMode() === 'full' ? e.f : e.n)) || popShow(pop.v);
   $('#popInput').dataset.auto = popShow(pop.v);
   $('#popReset').style.display = e ? '' : 'none';
+  const bv = breathOf(pop.ref.p, pop.ref.l, pop.ref.i);
+  $('#popBreath').textContent = bv === 1 ? '🌬 נשימה  /  (לחץ: ארוכה)' : bv === 2 ? '🌬 נשימה ארוכה  //  (לחץ: הסר)' : '🌬 נשימה אחרי המילה';
   const hasN = notesOf(pop.ref.p).filter(x => inNote(x, pop.ref.l, pop.ref.i)).pop();
   $('#popNote').textContent = hasN ? '🎙 ערוך הנחיה: ' + noteLabel(hasN) : '🎙 הנחיה לקריין';
 }
@@ -600,8 +752,18 @@ function openPop(span) {
   if (top + el.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - el.offsetHeight - 8);
   el.style.top = top + 'px'; el.style.left = left + 'px';
 }
-$('#edView').addEventListener('click', ev => { const w = ev.target.closest('.w'); if (w && state.tab !== 'orig') { ev.stopPropagation(); openPop(w); } });
-$('#rdView').addEventListener('click', ev => { const w = ev.target.closest('.w'); if (w) { ev.stopPropagation(); if (playing) stopPlay(); openPop(w); } });
+function viewClick(ev, reader) {
+  const br = ev.target.closest('.breath');
+  if (br) { ev.stopPropagation(); cycleBreath(+br.closest('.sheet').dataset.p, +br.closest('[data-l]').dataset.l, +br.dataset.w, true); return; }
+  const w = ev.target.closest('.w'); if (!w || (!reader && state.tab === 'orig')) return;
+  ev.stopPropagation();
+  if (ev.altKey) { const r = refOf(w); window.getSelection()?.removeAllRanges(); cycleBreath(r.p, r.l, r.i, false); return; }   // Alt+click = breath here
+  if (reader && playing) stopPlay();
+  openPop(w);
+}
+$('#edView').addEventListener('click', ev => viewClick(ev, false));
+$('#rdView').addEventListener('click', ev => viewClick(ev, true));
+$('#popBreath').onclick = () => { const r = pop.ref; if (r) { cycleBreath(r.p, r.l, r.i, false); const sp = activeView().sheets[r.p - 1]?.querySelector(`[data-l="${r.l}"] .w[data-i="${r.i}"]`); if (sp) sp.classList.add('sel'); drawPop(); } };
 $('#popApply').onclick = () => {
   const val = $('#popInput').value.trim(); if (!pop.ref || !val) return hidePop();
   if (val === $('#popInput').dataset.auto) saveFromPop({ v: pop.v });
@@ -743,7 +905,7 @@ $('#rFsizeUp').onclick = () => rdView.zoomBy(1.12); $('#rFsizeDn').onclick = () 
 $('#btnReadMode').onclick = openReader; $('#navTele').onclick = openReader; $('#btnFull').onclick = openReader;
 document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && readerOpen) closeReader(); });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { if ($('#guide').style.display === 'flex') { $('#guide').style.display = 'none'; return; } if (note.ref) return hideNotePop(); if (pop.ref) return hidePop(); if (readerOpen) closeReader(); return; }
+  if (e.key === 'Escape') { if ($('#libModal').style.display === 'flex') { closeLibrary(); return; } if ($('#guide').style.display === 'flex') { $('#guide').style.display = 'none'; return; } if (note.ref) return hideNotePop(); if (pop.ref) return hidePop(); if (readerOpen) closeReader(); return; }
   if (!readerOpen || e.metaKey || e.ctrlKey) return;
   const sc = rdView.sc;
   if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
@@ -773,9 +935,18 @@ $('#inputArea').addEventListener('input', saveState);
   state.density = d; const pct = [0, 50, 100][DMAP[d]];
   $('#densFill').style.width = pct + '%'; $('#densDot').style.right = pct + '%'; $('#densFill').style.right = '0'; $('#densFill').style.left = 'auto';
   document.querySelectorAll('#densStops span').forEach(s => s.classList.toggle('on', s.dataset.d === d));
-  const doc = await idb.get('doc');
+  LIB = (await idb.get('lib')) || [];
+  const legacy = await idb.get('doc');
+  if (legacy && legacy.pages) {
+    if (!libEntry(legacy.uid)) { await idb.set('doc:' + legacy.uid, legacy); LIB.push({ uid: legacy.uid, key: keyOfDoc(legacy), name: legacy.name, title: '', kind: legacy.kind, count: legacy.count, added: Date.now(), opened: Date.now(), page: state.page }); await libSave(); }
+    if (!state.cur) state.cur = legacy.uid;
+    await idb.del('doc');
+  }
+  updateLibBtn();
+  const ce = libEntry(state.cur), doc = ce ? await idb.get('doc:' + ce.uid) : null;
+  if (doc && doc.kind === 'text' && doc.src && !$('#inputArea').value) $('#inputArea').value = doc.src;
   INIT = false;
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (DOC) refreshAll(); });
-  if (doc && doc.pages && doc.pages.length) await setDoc(doc, { restored: true, tab: state.tab === 'orig' && doc.kind === 'pdf' ? 'narr' : state.tab, page: state.page });
+  if (doc && doc.pages && doc.pages.length) await setDoc(doc, { restored: true, tab: state.tab === 'orig' && doc.kind === 'pdf' ? 'narr' : state.tab, page: ce.page || state.page });
   else showTab('orig');
 })();
