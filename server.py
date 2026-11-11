@@ -15,7 +15,10 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 # Engine selection: local standalone model (default) or dicta (online fallback).
-ENGINE = os.environ.get('NIKUD_ENGINE', 'local').lower()
+_MODEL = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'models', 'phonikud-1.0.int8.onnx')
+_CLOUD = any(k.startswith('RAILWAY_') for k in os.environ)
+# default engine: the local model when it is installed, otherwise Dicta (cloud hosting has no model)
+ENGINE = os.environ.get('NIKUD_ENGINE', 'local' if os.path.exists(_MODEL) else 'dicta').lower()
 if ENGINE == 'dicta':
     import nikud_engine_dicta as E     # online version: Dicta's Nakdan, no local model
 else:
@@ -28,7 +31,7 @@ except Exception:
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PORT = int(os.environ.get('PORT', '8788'))
-HOST = os.environ.get('HOST', '127.0.0.1')              # cloud hosting: HOST=0.0.0.0
+HOST = os.environ.get('HOST', '0.0.0.0' if _CLOUD else '127.0.0.1')   # cloud hosting listens on all interfaces
 PASSWORD = os.environ.get('NAKDAN_PASSWORD', '')        # optional HTTP Basic Auth (user: pele)
 MAX_CHARS = 16000      # per nikud call; the textarea is editable so users pick a section
 
