@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ניקוד לקריינים</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700&family=Frank+Ruhl+Libre:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0e1018; --bg2:#0a0c14; --panel:#171a26; --panel2:#1c2030; --line:#272b3d;
+  --txt:#e8eaf4; --muted:#9aa0b8; --dim:#6b7190;
+  --accent:#7b61ff; --accent2:#9179ff; --accent-soft:#2a2550;
+  --ok:#36d399; --warn:#ffb020; --crit:#ff6b8b;
+  --canvas:#ffffff; --canvas-ink:#15131d; --canvas-risk:#efe9ff; --canvas-risk-line:#d9ccff;
+  --radius:16px; --radius-sm:10px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  background:radial-gradient(1200px 600px at 80% -10%, #1a1733 0%, transparent 55%), var(--bg);
+  color:var(--txt); font-family:"Heebo",system-ui,Arial,sans-serif; font-size:15px;
+  overflow:hidden;
+}
+button{font-family:inherit;cursor:pointer;color:inherit}
+.app{display:flex;flex-direction:column;height:100vh}
+
+/* ---------- top bar ---------- */
+.topbar{display:flex;align-items:center;gap:18px;padding:12px 20px;background:var(--bg2);
+  border-bottom:1px solid var(--line);flex:0 0 auto}
+.brand{display:flex;align-items:center;gap:12px;margin-inline-start:auto;order:3}
+.brand .logo{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;
+  background:linear-gradient(145deg,#8b6dff,#6b4dff);box-shadow:0 6px 18px rgba(123,97,255,.4);font-size:22px}
+.brand h1{margin:0;font-size:21px;font-weight:700;letter-spacing:.2px}
+.brand p{margin:2px 0 0;font-size:12px;color:var(--muted)}
+.navs{display:flex;gap:8px;order:2;align-items:center}
+.nav{display:flex;align-items:center;gap:7px;padding:9px 16px;border-radius:12px;border:1px solid transparent;
+  background:transparent;color:var(--muted);font-size:14px;font-weight:500;transition:.15s}
+.nav:hover{background:#ffffff0d;color:var(--txt)}
+.nav.primary{background:linear-gradient(145deg,#8b6dff,#6b4dff);color:#fff;
+  box-shadow:0 6px 16px rgba(123,97,255,.35)}
+.nav.active{color:var(--accent2)}
+.wdots{display:flex;gap:9px;order:1;opacity:.5}
+.wdots i{width:13px;height:13px;border-radius:4px;border:1.5px solid #4a4f66;display:block}
+
+/* ---------- body ---------- */
+.body{display:flex;flex-direction:row-reverse;gap:16px;padding:16px 20px;flex:1 1 auto;min-height:0}
+
+/* settings */
+.settings{flex:0 0 310px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  padding:18px;display:flex;flex-direction:column;gap:18px;overflow:auto}
+.settings h2{margin:0;font-size:16px;display:flex;align-items:center;gap:8px}
+.sec{background:var(--panel2);border:1px solid var(--line);border-radius:var(--radius-sm);padding:14px}
+.sec .lbl{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px;margin-bottom:12px;font-weight:500}
+.density .track{position:relative;height:6px;background:#2a2e40;border-radius:6px;margin:14px 6px}
+.density .fill{position:absolute;height:6px;border-radius:6px;background:linear-gradient(90deg,#6b4dff,#9179ff)}
+.density .dot{position:absolute;top:50%;width:16px;height:16px;border-radius:50%;background:#fff;
+  transform:translate(-50%,-50%);box-shadow:0 2px 8px rgba(0,0,0,.4);border:3px solid var(--accent)}
+.density .stops{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);margin-top:4px}
+.density .stops b{display:block;color:var(--txt);font-weight:600;font-size:12px}
+.density .stops span{cursor:pointer;text-align:center;flex:1}
+.density .stops span.on b{color:var(--accent2)}
+
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:9px 2px;font-size:13.5px}
+.toggle-row+.toggle-row{border-top:1px solid #ffffff08}
+.sw{position:relative;width:40px;height:22px;border-radius:22px;background:#2a2e40;transition:.18s;flex:0 0 auto}
+.sw.on{background:linear-gradient(145deg,#8b6dff,#6b4dff)}
+.sw::after{content:"";position:absolute;top:3px;right:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.18s}
+.sw.on::after{right:21px}
+.sec-title{font-size:14px;font-weight:600;display:flex;align-items:center;gap:7px;color:var(--txt)}
+.demo{display:flex;flex-direction:column;gap:8px}
+.demo .drow{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.demo .drow small{color:var(--muted)}
+.chip{background:#20243a;border:1px solid var(--line);border-radius:9px;padding:6px 14px;
+  font-family:"Frank Ruhl Libre",serif;font-size:19px;color:var(--txt)}
+.chip.ph{border-color:#4a3da0;color:var(--accent2);background:#221e44}
+
+/* editor */
+.editor{flex:1 1 auto;display:flex;flex-direction:column;gap:12px;min-width:0}
+.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tbtn{display:flex;align-items:center;gap:7px;padding:9px 14px;border-radius:11px;border:1px solid var(--line);
+  background:var(--panel);color:var(--txt);font-size:13.5px;font-weight:500;transition:.15s}
+.tbtn:hover{background:var(--panel2);border-color:#3a3f57}
+.tbtn.ghost{background:transparent}
+.tbtn.icon{padding:9px 11px}
+.tbtn.convert{margin-inline-end:auto;background:linear-gradient(145deg,#8b6dff,#6b4dff);border:none;color:#fff;
+  font-weight:600;box-shadow:0 6px 16px rgba(123,97,255,.3);padding:10px 18px}
+.tbtn:disabled{opacity:.45;cursor:default}
+
+.pane{flex:1 1 auto;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.tabs{display:flex;gap:6px;padding:12px 16px 0}
+.tab{padding:10px 16px;border-radius:10px 10px 0 0;color:var(--muted);font-size:14px;font-weight:600;
+  border:none;background:transparent;position:relative}
+.tab.active{color:var(--accent2)}
+.tab.active::after{content:"";position:absolute;inset-inline:10px;bottom:-1px;height:3px;border-radius:3px;background:var(--accent)}
+.tab:hover{color:var(--txt)}
+
+.canvas-wrap{flex:1 1 auto;margin:12px;border-radius:14px;background:var(--canvas);overflow:auto;position:relative}
+.canvas{padding:46px 52px;color:var(--canvas-ink);font-family:"Frank Ruhl Libre",serif;
+  font-size:var(--fs,40px);line-height:var(--lh,1.95);text-align:justify;min-height:100%}
+#inputArea{width:100%;min-height:100%;border:none;outline:none;resize:none;background:transparent;
+  color:var(--canvas-ink);font-family:"Frank Ruhl Libre",serif;font-size:var(--fs,40px);line-height:var(--lh,1.9);
+  padding:0;direction:rtl}
+.w{position:relative;border-radius:6px;padding:0 1px;transition:background .12s;cursor:pointer}
+.w:hover{background:#00000008}
+.w.risk{background:var(--canvas-risk);box-shadow:inset 0 0 0 1px var(--canvas-risk-line)}
+.w.sel{background:#e2d8ff;box-shadow:inset 0 0 0 1px var(--accent)}
+.w.cur{background:#fff6d6}
+.w.edited{border-bottom:2px dotted #9179ff}
+.w.bm,.rw.bm{background:#ffe9a8;box-shadow:inset 0 -3px 0 #f0b400;border-radius:4px}
+.w.bm::before,.rw.bm::before{content:"🔖";font-size:.45em;vertical-align:super;margin-inline-end:2px}
+.par{margin:0 0 .35em}
+.par+.par{text-indent:1.1em}
+.pill.active{border-color:var(--accent);color:var(--accent2);background:#201c3e}
+.booknav .bname{max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:12px}
+.booknav button:disabled{opacity:.35;cursor:default}
+.pop .row2{display:flex;gap:7px;margin-top:9px}
+.pop .row2 button{flex:1;background:#20243a;border:1px solid var(--line);border-radius:9px;padding:7px 8px;font-size:12.5px;color:var(--txt)}
+.pop .row2 button:hover{border-color:var(--accent)}
+.stress{position:relative}
+.stress::before{content:"";position:absolute;top:-.46em;right:48%;width:0;height:0;
+  border-inline:4px solid transparent;border-bottom:7px solid var(--accent);opacity:.9}
+.breath{color:var(--accent);opacity:.5;font-weight:700;margin:0 2px}
+.placeholder{color:#b9bccb;font-style:normal}
+
+/* read bar */
+.readbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;background:var(--panel);
+  border:1px solid var(--line);border-radius:var(--radius)}
+.readbar .grp{display:flex;align-items:center;gap:6px}
+.pill{display:flex;align-items:center;gap:8px;padding:8px 13px;border-radius:11px;border:1px solid var(--line);
+  background:var(--panel2);font-size:13px;color:var(--txt)}
+.pill b{font-weight:600}
+.step{width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);
+  display:grid;place-items:center;font-size:15px}
+.readbar .mode.active{border-color:var(--accent);color:var(--accent2);background:#201c3e}
+.spacer{margin-inline-start:auto}
+
+/* transport */
+.transport{display:flex;align-items:center;gap:16px;padding:14px 22px;background:var(--bg2);
+  border-top:1px solid var(--line);flex:0 0 auto}
+.tp-btns{display:flex;align-items:center;gap:14px}
+.tp{width:40px;height:40px;border-radius:50%;background:transparent;border:none;display:grid;place-items:center;color:var(--muted)}
+.tp:hover{color:var(--txt)}
+.tp.play{width:58px;height:58px;background:linear-gradient(145deg,#8b6dff,#6b4dff);color:#fff;
+  box-shadow:0 8px 22px rgba(123,97,255,.4);font-size:22px}
+.speed{display:flex;flex-direction:column;gap:3px;min-width:260px}
+.speed .top{display:flex;justify-content:space-between;font-size:11px;color:var(--dim)}
+.speed input[type=range]{-webkit-appearance:none;height:6px;border-radius:6px;background:linear-gradient(90deg,#6b4dff,#2a2e40);outline:none}
+.speed input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid var(--accent);cursor:pointer}
+.t-right{margin-inline-start:auto;display:flex;gap:10px;align-items:center}
+
+input[type=range].mini{-webkit-appearance:none;height:5px;border-radius:5px;background:#2a2e40;width:90px}
+input[type=range].mini::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent2);cursor:pointer}
+
+/* popover */
+.pop{position:fixed;z-index:50;background:var(--panel2);border:1px solid #3a3f57;border-radius:14px;
+  padding:12px;box-shadow:0 18px 50px rgba(0,0,0,.6);min-width:240px;display:none}
+.pop h4{margin:0 0 4px;font-size:13px;color:var(--muted);font-weight:500}
+.pop .alts{display:flex;flex-wrap:wrap;gap:7px;margin:8px 0}
+.pop .alt{font-family:"Frank Ruhl Libre",serif;font-size:21px;background:#20243a;border:1px solid var(--line);
+  border-radius:9px;padding:5px 12px}
+.pop .alt:hover{border-color:var(--accent);background:#241f46}
+.pop .edit{display:flex;gap:7px;margin-top:8px}
+.pop .edit input{flex:1;background:#12141e;border:1px solid var(--line);border-radius:9px;color:var(--txt);
+  font-family:"Frank Ruhl Libre",serif;font-size:19px;padding:6px 10px;direction:rtl}
+.pop .edit button{background:var(--accent);border:none;color:#fff;border-radius:9px;padding:0 14px;font-weight:600}
+
+/* modal */
+.modal{position:fixed;inset:0;background:#000a;display:none;z-index:60;align-items:center;justify-content:center;padding:30px}
+.modal .card{background:var(--panel);border:1px solid var(--line);border-radius:20px;max-width:760px;max-height:85vh;
+  overflow:auto;padding:30px}
+.modal h2{margin-top:0}
+.modal h3{color:var(--accent2);margin:22px 0 8px}
+.modal p,.modal li{color:#cfd3e4;line-height:1.7}
+.modal code{background:#20243a;padding:2px 7px;border-radius:6px;font-family:"Frank Ruhl Libre",serif;font-size:1.05em}
+.modal .x{float:left;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:6px 12px}
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#20243a;border:1px solid var(--line);
+  color:var(--txt);padding:11px 20px;border-radius:12px;z-index:70;display:none;box-shadow:0 10px 30px #0008}
+.busy{position:absolute;inset:0;background:#ffffffcc;display:none;place-items:center;z-index:5;border-radius:14px}
+.busy .sp{width:40px;height:40px;border:4px solid #d9ccff;border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* reading (teleprompter) mode */
+body.reading .settings,body.reading .toolbar,body.reading .tabs{display:none}
+body.reading .readbar{display:flex}
+
+/* ---------- book navigation bar ---------- */
+.booknav{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;background:var(--panel2);
+  border:1px solid var(--line);border-radius:var(--radius-sm)}
+.booknav select{background:#12141e;border:1px solid var(--line);color:var(--txt);border-radius:9px;
+  padding:7px 10px;font-family:inherit;font-size:13px;max-width:230px}
+.booknav .pgctrl{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.booknav .pgctrl input{width:58px;background:#12141e;border:1px solid var(--line);color:var(--txt);
+  border-radius:8px;padding:6px 8px;text-align:center;font-family:inherit}
+.booknav button{background:var(--panel);border:1px solid var(--line);color:var(--txt);border-radius:9px;
+  padding:7px 12px;font-size:13px;font-weight:500}
+.booknav button:hover{background:#242838;border-color:#3a3f57}
+.booknav .printed{color:var(--accent2);font-size:12px}
+.booknav .bmk{margin-inline-start:auto;display:flex;gap:8px}
+.booknav #pgMark{border-color:#4a3da0;color:var(--accent2)}
+.booknav #pgResume{border-color:#2a6b4a;color:var(--ok)}
+
+/* ---------- immersive book reader (מסך מלא) ---------- */
+.reader{position:fixed;inset:0;z-index:100;background:#e8e6df;display:none}
+.reader.on{display:block}
+
+.reader-sheet{max-width:860px;margin:0 auto;min-height:100%;background:#fdfcf8;
+  box-shadow:0 0 60px rgba(0,0,0,.28);}
+.reader-text{padding:7vh clamp(22px,6vw,80px) 40vh;color:#17130b;
+  font-family:"Frank Ruhl Libre",serif;font-size:var(--rfs,42px);line-height:var(--rlh,2.2);
+  text-align:justify;direction:rtl;font-weight:500}
+.reader-text .stress{position:relative}
+.reader-text .stress::before{content:"";position:absolute;top:-.42em;right:48%;width:0;height:0;
+  border-inline:3.5px solid transparent;border-bottom:6px solid #b0a; opacity:.55}
+.reader-bar{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;
+  background:rgba(18,20,30,.9);backdrop-filter:blur(10px);padding:9px 16px;border-radius:18px;
+  box-shadow:0 12px 36px rgba(0,0,0,.45);z-index:101;transition:opacity .45s;border:1px solid #ffffff14}
+.reader-bar.hidden{opacity:0;pointer-events:none}
+.reader-bar button{background:transparent;border:none;color:#e8eaf4;font-size:15px;width:40px;height:40px;
+  border-radius:50%;display:grid;place-items:center;transition:.15s}
+.reader-bar button:hover{background:#ffffff1c}
+.reader-bar .rplay{background:linear-gradient(145deg,#8b6dff,#6b4dff);color:#fff;width:50px;height:50px;font-size:19px;
+  box-shadow:0 6px 16px rgba(123,97,255,.4)}
+.reader-bar .sep{width:1px;height:26px;background:#ffffff22;margin:0 2px}
+.reader-bar .rspeed{display:flex;align-items:center;gap:8px;color:#9aa0b8;font-size:11px}
+.reader-bar .rspeed input{width:120px;-webkit-appearance:none;height:5px;border-radius:5px;background:#3a3f57;outline:none}
+.reader-bar .rspeed input::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:#fff;border:3px solid var(--accent);cursor:pointer}
+.reader-hint{position:fixed;top:20px;left:50%;transform:translateX(-50%);color:#6b7190;font-size:12px;
+  background:rgba(18,20,30,.75);padding:6px 14px;border-radius:12px;z-index:101;transition:opacity .5s}
+.reader-hint.hidden{opacity:0}
+.reader-guide{position:fixed;left:0;right:0;top:22%;background:rgba(123,97,255,.055);
+  border-block:1px solid rgba(123,97,255,.22);pointer-events:none;z-index:100;display:none}
+.reader.follow .reader-guide{display:block}
+.reader-bar .rpage{color:#cfd3e4;font-size:12px;min-width:74px;text-align:center;white-space:nowrap}
+.reader-text .par+.par{text-indent:1.2em}
+
+
+/* ---------- document view: continuous pages, 1:1 with the PDF ---------- */
+.canvas-wrap.docmode{background:#d9d6cd}
+#inputArea{font-size:24px;line-height:1.9;padding:28px 34px;box-sizing:border-box}
+.docview{display:flex;flex-direction:column;align-items:center;gap:10px;padding:16px 24px 45vh;width:max-content;min-width:100%;
+  box-sizing:border-box;direction:rtl;--z:1;--ff:1}
+.pgsep{font:500 12px Heebo,sans-serif;color:#8a8577;margin-top:10px;user-select:none}
+.sheet{position:relative;flex:0 0 auto;background:#fdfcf8;color:#17130b;box-shadow:0 2px 16px rgba(0,0,0,.22);
+  font-family:"Frank Ruhl Libre",serif;font-weight:500;direction:rtl;overflow:hidden;
+  width:calc(var(--pw)*var(--z)*1px);height:calc(var(--ph)*var(--z)*1px)}
+.sheet.flow{height:auto;min-height:calc(90*var(--z)*1px);box-sizing:border-box;overflow:visible;
+  padding:calc(46*var(--z)*1px) calc(54*var(--z)*1px);font-size:calc(19*var(--z)*1px);line-height:var(--lh,1.95);text-align:justify}
+.ln{position:absolute;white-space:nowrap;line-height:1;text-align:right;
+  top:calc((var(--y) - var(--s)*.52)*var(--z)*1px);right:calc(var(--r)*var(--z)*1px);
+  width:calc(var(--wd)*var(--z)*1px);font-size:calc(var(--s)*var(--z)*var(--ff)*1px)}
+.lni{display:inline-block;white-space:nowrap;transform-origin:right center}
+.sheet .w{padding:0;border-radius:.16em;cursor:pointer}
+.sheet .w.risk{background:var(--canvas-risk);box-shadow:0 0 0 .05em var(--canvas-risk-line)}
+.sheet .w.sel{background:#e2d8ff;box-shadow:0 0 0 .06em var(--accent)}
+.sheet .w.edited{border-bottom:.07em dotted #7b61ff}
+.sheet .w.bm{background:#ffe9a8;box-shadow:0 .12em 0 #f0b400}
+.sheet .w.bm::before{content:none}
+.stress{position:relative}
+.stress::before{content:"";position:absolute;top:-.34em;right:50%;transform:translateX(50%);width:0;height:0;
+  border-inline:.11em solid transparent;border-bottom:.19em solid var(--accent);opacity:.9}
+.reader .w{cursor:default}
+.pstate{position:absolute;top:10px;left:12px;font:500 12px Heebo,sans-serif;color:#7b61ff;background:#efeaff;padding:3px 10px;border-radius:9px}
+.sheet.flow .pstate{position:static;display:inline-block;margin-top:8px}
+.legend .lg{display:flex;gap:10px;align-items:flex-start;font-size:12.5px;color:var(--muted);line-height:1.5;padding:7px 0}
+.legend .lg+.lg{border-top:1px solid #ffffff08}
+.legend .lgk{flex:0 0 62px;text-align:center;font-family:"Frank Ruhl Libre",serif;font-size:19px;color:#17130b;background:#fdfcf8;border-radius:7px;padding:5px 0 3px;line-height:1.5}
+.legend b{color:var(--txt);font-weight:600}
+/* popover */
+.pop{max-width:min(520px,94vw)}
+.pop .alt{display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 14px}
+.pop .alt .big{font-family:"Frank Ruhl Libre",serif;font-size:24px;line-height:1.5}
+.pop .alt small{font-size:11px;color:var(--muted);font-family:Heebo,sans-serif}
+.pop .alt small i{font-style:normal;color:var(--accent2)}
+.pop .alt.cur{border-color:var(--accent);background:#241f46}
+.pop h4{margin:10px 0 4px}
+.pop h4:first-child{margin-top:0}
+.pop .letters{display:flex;flex-wrap:wrap;gap:4px;direction:rtl;margin:6px 0}
+.pop .let{font-family:"Frank Ruhl Libre",serif;font-size:24px;line-height:1.7;min-width:34px;background:#12141e;border:1px solid var(--line);border-radius:8px;color:var(--txt);padding:0 6px}
+.pop .let.on{border-color:var(--accent);background:#241f46}
+.pop .let.st{box-shadow:inset 0 3px 0 var(--accent)}
+.pop .vowels{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+.pop .vw{display:flex;flex-direction:column;align-items:center;min-width:46px;background:#20243a;border:1px solid var(--line);border-radius:8px;color:var(--txt);padding:2px 5px 4px}
+.pop .vw span{font-family:"Frank Ruhl Libre",serif;font-size:20px;line-height:1.6}
+.pop .vw small{font-size:9.5px;color:var(--muted)}
+.pop .vw:hover,.pop .vw.on{border-color:var(--accent)}
+/* reader */
+.reader{background:#d9d6cd}
+.reader-page{height:100%;overflow:auto;position:relative}
+.reader-guide{height:var(--guide,80px)}
+.pop{z-index:300}
+.toast{z-index:310}
+.reader .w{cursor:pointer}
+/* narrator directions */
+.w.nt{background:color-mix(in srgb,var(--nc) 16%,transparent) !important;box-shadow:0 .11em 0 var(--nc) !important}
+.ntp{color:var(--nc);font-weight:700;margin:0 .18em}
+.mnote{position:absolute;right:calc(5*var(--z)*1px);top:calc(var(--ny)*var(--z)*1px);max-width:calc(var(--nw)*var(--z)*1px);z-index:2;
+  font:500 calc(7.4*var(--z)*1px)/1.2 Heebo,sans-serif;color:#2a2533;background:color-mix(in srgb,var(--nc) 15%,#fff);
+  border-inline-start:calc(2*var(--z)*1px) solid var(--nc);border-radius:calc(2.5*var(--z)*1px);
+  padding:calc(1.5*var(--z)*1px) calc(3*var(--z)*1px);cursor:pointer;direction:rtl;text-align:right;white-space:normal;user-select:none}
+.mnote:hover{filter:brightness(.96)}
+.nkinds{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0 10px}
+.nk{display:flex;align-items:center;gap:6px;background:#20243a;border:1px solid var(--line);border-inline-start:3px solid var(--nc);
+  border-radius:9px;color:var(--txt);padding:7px 8px;font-size:12.5px;text-align:right}
+.nk span{font-size:15px}
+.nk:hover{border-color:var(--nc)}
+.nk.on{background:color-mix(in srgb,var(--nc) 26%,#20243a);border-color:var(--nc)}
+#notePop{width:min(480px,94vw)}
+#notePop .edit input{font-family:Heebo,sans-serif;font-size:14px}
+.canvas-wrap{min-height:220px}
+.pane{min-height:280px}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- TOP BAR -->
+  <header class="topbar">
+    <div class="wdots"><i></i><i></i><i></i></div>
+    <nav class="navs">
+      <button class="nav primary" id="navEditor">📄 עורך ניקוד</button>
+      <button class="nav" id="navTele">🖥 טלפרומפטר</button>
+      <button class="nav" id="navSettings">⚙ הגדרות</button>
+      <button class="nav" id="navGuide">📖 מדריך ושיטה</button>
+    </nav>
+    <div class="brand">
+      <div style="text-align:left">
+        <h1>ניקוד לקריינים</h1>
+        <p>ניקוד פונטי · ניקוד מעשי להקראה ושידור</p>
+      </div>
+      <div class="logo">🎙️</div>
+    </div>
+  </header>
+
+  <div class="body">
+    <!-- SETTINGS -->
+    <aside class="settings" id="settings">
+      <h2>⚙ הגדרות ניקוד</h2>
+
+      <div class="sec density">
+        <div class="lbl">ⓘ אפיפות ניקוד (Density)</div>
+        <div class="track" id="densTrack">
+          <div class="fill" id="densFill"></div>
+          <div class="dot" id="densDot"></div>
+        </div>
+        <div class="stops" id="densStops">
+          <span data-d="minimal"><b>מינימלי</b>קריטי + תחיליות</span>
+          <span data-d="medium" class="on"><b>בינוני</b>+ דגש בכ״פ, שׁ/שׂ</span>
+          <span data-d="full"><b>מלא פונטי</b>כל המילים</span>
+        </div>
+      </div>
+
+      <div class="sec legend">
+        <div class="sec-title">🔎 מקרא הסימונים</div>
+        <div class="lg"><span class="lgk"><span class="w risk">מִלָה</span></span><span>מילה <b>קריטית</b> — קל לטעות בה: מלעיל, קמץ קטן (נהגה O) או שווא נע (נהגה e). ריחוף עם העכבר מראה למה.</span></div>
+        <div class="lg"><span class="lgk"><span class="stress">שֶׁ</span>מֶשׁ</span><span>▲ מעל אות = <b>ההברה המוטעמת</b> במילה שהטעמתה מלעיל (לא בהברה האחרונה).</span></div>
+        <div class="lg"><span class="lgk">בֶּ / בַּ</span><span><b>תחילית</b> ב־, כ־, ל־ מנוקדת תמיד: <b>לֶ</b>ספר = for a book, <b>לַ</b>ספר = to the book.</span></div>
+        <div class="lg"><span class="lgk"><span class="w edited">מילה</span></span><span>קו מנוקד = תיקנת ידנית. לחיצה על כל מילה פותחת בחירת הגייה ועריכה.</span></div>
+        <div class="lg"><span class="lgk"><span class="w bm">מילה</span></span><span>🔖 = כאן הפסקת להקריא.</span></div>
+        <div class="lg"><span class="lgk"><span class="w nt" style="--nc:#3b82f6">מילה</span></span><span>🎙 <b>הנחיה לקריין</b> — גרור עם העכבר על כמה מילים (או לחץ על מילה ← ״הנחיה לקריין״). התווית מופיעה בשוליים.</span></div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-title">✓ כללי השיטה <small style="color:var(--muted);font-weight:400">(פעיל)</small></div>
+        <div id="toggles"></div>
+      </div>
+
+      <div class="sec demo">
+        <div class="sec-title">⇄ דוגמה: השיטה בפעולה</div>
+        <div class="drow"><small>ניקוד דקדוקי:</small><span class="chip" id="demoGram">תָּכְנִית</span></div>
+        <div class="drow"><small>ניקוד לקריינים:</small><span class="chip ph" id="demoPhon">תֹּכנִית</span></div>
+      </div>
+    </aside>
+
+    <!-- EDITOR -->
+    <main class="editor">
+      <div class="toolbar">
+        <button class="tbtn convert" id="btnConvert">✦ המר לטקסט לקריינים</button>
+        <button class="tbtn ghost" id="btnClean">🧹 נקה</button>
+        <button class="tbtn icon ghost" id="btnTrash" title="מחק הכל">🗑</button>
+        <button class="tbtn icon ghost" id="btnUndo" title="בטל">↶</button>
+        <button class="tbtn icon ghost" id="btnRedo" title="בצע שוב">↷</button>
+        <button class="tbtn" id="btnImport">⇪ ייבוא PDF / TXT</button>
+        <button class="tbtn" id="btnOpen" style="display:none">📁 פתיחה</button>
+        <button class="tbtn" id="btnSave">💾 שמירה</button>
+        <input type="file" id="fileTxt" accept=".txt,.pdf,text/plain,application/pdf" hidden>
+      </div>
+
+      <div class="booknav" id="bookNav" style="display:none">
+        <span class="bname" id="bookName"></span>
+        <select id="chapSel" title="קפיצה לפרק"><option value="">פרקים…</option></select>
+        <div class="pgctrl">
+          <button id="pgPrev">⏮ הקודם</button>
+          <span>עמוד</span><input id="pgInput" type="number" min="1" value="1" title="מספר עמוד בקובץ"><span id="pgTotal">/ ?</span>
+          <span id="pgPrinted" class="printed"></span>
+          <button id="pgNext">הבא ⏭</button>
+        </div>
+        <div class="bmk">
+          <button id="pgResume" style="display:none">↩︎ המקום שהפסקתי</button>
+          <button id="pgMark" title="שמור איפה הפסקת">🔖 הפסקתי כאן</button>
+        </div>
+      </div>
+
+      <div class="pane">
+        <div class="tabs">
+          <button class="tab" data-tab="orig">טקסט מקורי (ללא ניקוד)</button>
+          <button class="tab" data-tab="full">ניקוד דקדוקי (תקני)</button>
+          <button class="tab active" data-tab="narr">ניקוד לקריינים (פונטי)</button>
+        </div>
+        <div class="canvas-wrap" id="canvasWrap">
+          <div class="busy" id="busy"><div class="sp"></div></div>
+          <textarea id="inputArea" class="canvas" placeholder="הדבק כאן טקסט ולחץ ״המר לטקסט לקריינים״ — או לחץ ״ייבוא״ כדי לפתוח קובץ PDF / TXT."></textarea>
+          <div class="docview" id="edView" style="display:none"></div>
+        </div>
+      </div>
+
+      <div class="readbar">
+        <button class="pill mode" id="btnReadMode">🖥 מצב קריאה</button>
+        <div class="grp"><span class="pill" style="border:none;background:transparent;color:var(--muted)" title="לטקסט מודבק (ב-PDF הפריסה זהה למקור)">מרווח שורות</span>
+          <input type="range" class="mini" id="lhRange" min="140" max="320" value="195"></div>
+        <div class="grp"><span style="color:var(--muted);font-size:13px">זום</span>
+          <button class="step" id="fsDown" title="זום החוצה">−</button><button class="step" id="fsUp" title="זום פנימה">+</button>
+          <button class="step" id="fsReset" title="התאם לרוחב" style="width:auto;padding:0 8px;font-size:12px">התאם</button></div>
+        <div class="pill"><span>עקוב אחרי קריאה</span><span class="sw on" id="swFollow"></span></div>
+        <div class="spacer"></div>
+        <button class="pill" id="btnBreath">≋ ניהול נשימות</button>
+        <button class="pill" id="btnNotes" title="הצג / הסתר את ההנחיות שסימנת">🎙 הנחיות</button>
+        <button class="pill" id="btnCrit">🎨 הדגשת קריטי</button>
+      </div>
+    </main>
+  </div>
+
+  <!-- TRANSPORT -->
+  <footer class="transport">
+    <button class="pill" id="btnFull">⛶ מסך מלא</button>
+    <div class="t-right" style="margin:0"></div>
+    <div class="speed">
+      <div class="top"><span>איטי</span><span>קצב גלילה (טלפרומפטר)</span><span>מהיר</span></div>
+      <input type="range" id="speed" min="1" max="100" value="35">
+    </div>
+    <div class="tp-btns" style="margin-inline-start:auto">
+      <button class="tp" id="btnPrev">⏮</button>
+      <button class="tp play" id="btnPlay">▶</button>
+      <button class="tp" id="btnNext">⏭</button>
+    </div>
+  </footer>
+</div>
+
+<!-- immersive book reader (מסך מלא) -->
+<div class="reader" id="reader">
+  <div class="reader-page" id="readerPage">
+    <div class="docview" id="rdView"></div>
+  </div>
+  <div class="reader-guide"></div>
+  <div class="reader-hint" id="readerHint">רווח = גלילה אוטומטית · צביטה / Ctrl+גלגלת = זום לכל הדף · 0 = איפוס זום · לחיצה על מילה = בחירת הגייה ועריכה · B = ״הפסקתי כאן״ · Esc = יציאה</div>
+  <div class="reader-bar" id="readerBar">
+    <button id="rExit" title="יציאה (Esc)">✕</button>
+    <span class="sep"></span>
+    <button id="rFsizeDn" title="זום החוצה (−)">−</button>
+    <button id="rFsizeUp" title="זום פנימה (+)">+</button>
+    <span class="sep"></span>
+    <button id="rPrev" title="עמוד קודם">⏮</button>
+    <button id="rPlay" class="rplay" title="נגן/עצור (רווח)">▶</button>
+    <button id="rNext" title="עמוד הבא">⏭</button>
+    <button id="rMark" title="הפסקתי כאן (B)">🔖</button>
+    <span class="rpage" id="rPage"></span>
+    <span class="sep"></span>
+    <div class="rspeed"><span>איטי</span><input type="range" id="rSpeed" min="1" max="100" value="35"><span>מהיר</span></div>
+  </div>
+</div>
+
+<!-- word popover -->
+<div class="pop" id="pop">
+  <h4 id="popVarTitle">הגייה:</h4>
+  <div class="alts" id="popAlts"></div>
+  <h4>עריכת אות: בחר אות ואז תנועה</h4>
+  <div class="letters" id="popLetters"></div>
+  <div class="vowels" id="popVowels"></div>
+  <div class="edit"><input id="popInput" dir="rtl" title="אפשר גם להקליד ניקוד ידנית"><button id="popApply">החל</button></div>
+  <div class="row2">
+    <button id="popNote">🎙 הנחיה לקריין</button>
+    <button id="popMark">🔖 הפסקתי כאן</button>
+    <button id="popReset">↺ חזרה לניקוד האוטומטי</button>
+  </div>
+</div>
+
+<!-- narrator direction popover -->
+<div class="pop" id="notePop">
+  <h4>🎙 הנחיה לקריין עבור: <span id="noteWords" style="color:var(--txt);font-family:'Frank Ruhl Libre',serif;font-size:15px"></span></h4>
+  <div class="nkinds" id="noteKinds"></div>
+  <div class="edit"><input id="noteText" dir="rtl" placeholder="הערה משלך (לא חובה) — למשל: ״לנשום לפני״, ״שם של אדם״, ״כמו סוד״"></div>
+  <div class="row2">
+    <button id="noteSave" style="background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600">שמור הנחיה</button>
+    <button id="noteDel">🗑 מחק</button>
+    <button id="noteCancel">ביטול</button>
+  </div>
+</div>
+
+<!-- guide modal -->
+<div class="modal" id="guide">
+  <div class="card">
+    <button class="x" onclick="document.getElementById('guide').style.display='none'">✕ סגור</button>
+    <h2>📖 המדריך והשיטה — ניקוד לקריינים</h2>
+    <p>ניקוד לקריינים (ניקוד פונטי / מעשי) הוא ממשק קריאה לביצוע קולי בזמן אמת — לא כלי לבלשנות היסטורית.
+       המטרה: למנוע טעויות הגייה, להסיר עומס קוגניטיבי, ולאפשר קריאה שוטפת ובטוחה מול המיקרופון.</p>
+    <p><b>עצמאי ומדויק:</b> המנוע רץ <u>מקומית על המחשב</u> (מודל ניקוד עברי בקוד פתוח, phonikud) —
+       ללא Dicta וללא אינטרנט. הוא מבוסס על עקרונות הניקוד של האקדמיה ללשון העברית, ומזהה באופן מפורש
+       קמץ קטן, שווא נע והטעמה. <u>הניקוד לעולם אינו משנה את אותיות המילה — רק מוסיף סימנים.</u></p>
+    <h3>א. פישוט תנועות (חד-צורתיות)</h3>
+    <ul>
+      <li>צליל E — צירה / סגול / חטף-סגול → <b>סגול</b> אחיד.</li>
+      <li>צליל O — חולם בלבד; <b>קמץ קטן → חולם</b> (<code>כָּל→כֹּל</code>, <code>אָמָּנוּת→אֹמָנוּת</code>) כדי למנוע הגיית A שגויה.</li>
+      <li>צליל U — קובוץ → שורוק (היכן שיש ו').</li>
+      <li>צליל A — קמץ/פתח; חטף-פתח → פתח.</li>
+    </ul>
+    <h3>ב. טיפול בשוואים</h3>
+    <ul><li><b>שווא נח</b> (אינו נהגה) — הסימן מושמט, האות נשארת ריקה (<code>מִלְחָמָה→מִלחָמָה</code>).</li>
+      <li><b>שווא נע</b> — מומר לסגול כדי שתיהגה בוודאות תנועת e קצרה (<code>דְּבָרִים→דֶבָרִים</code>).</li></ul>
+    <h3>ג. דגשים</h3>
+    <ul><li>דגש קל ב-<b>ב, כ, פ</b> נשמר (משנה V/B, Kh/K, F/P).</li>
+      <li>דגש ב-ג, ד, ת ודגש חזק — מושמטים (אינם משנים הגייה מודרנית), למעט ב-בכפ לשמירת העיצור.</li>
+      <li>נקודת שׁ/שׂ נשמרת תמיד.</li></ul>
+    <h3>ד. הטעמה (מלעיל / מלרע)</h3>
+    <p>כ-80% מהמילים מלרע. במילים מבלבלות (סגוליים, נטיות עבר, לועזיות) מוסף סימן הטעמה עילי מעל ההברה המוטעמת.</p>
+    <h3>סליידר הצפיפות</h3>
+    <p><b>מינימלי</b> — רק מילים קריטיות (קמץ קטן, מלעיל, שווא נע). <b>בינוני</b> — ניקוד מלא לכל מילה + הדגשת קריטי.
+       <b>מלא פונטי</b> — ניקוד מלא + כל ההטעמות.</p>
+    <p style="color:var(--muted);font-size:13px">הערה: זיהוי קמץ קטן ללא ו' והטעמה מלעיל הם הרבדים העדינים ביותר ונשענים כרגע על חוקי-ליבה + לקסיקון;
+       לכל מילה יש עריכה ידנית מהירה (לחיצה על המילה).</p>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>

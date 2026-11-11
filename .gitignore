@@ -1,0 +1,7 @@
+.venv/
+models/
+__pycache__/
+deploy/
+bidi_compare.html
+*.log
+.DS_Store
