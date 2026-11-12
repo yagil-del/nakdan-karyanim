@@ -74,7 +74,7 @@ PDF ─► pdf_extract.py ─► עמודים בסדר קריאה אמיתי (Bi
   עמוד, שורות-דפוס וסימוני הערות → גיאומטריה לכל שורה (x0,x1,y,גודל) + פרקים מתוכן העניינים.
 - `app.js` + `index.html` — הממשק: `View` אחד לעורך ואחד למסך מלא; עמודים נטענים ומנוקדים בעצלתיים.
   התאמת רוחב שורה: מרווח-מילים ב-em (ובמקרה קיצון scaleX), כך שכל שורה ברוחב המדויק שלה ב-PDF.
-- `nikud_engine.py` — מנוע חלופי מבוסס Dicta (אונליין): `NIKUD_ENGINE=dicta`.
+- `nikud_engine_dicta.py` — מנוע Dicta לגרסה החיה (`nikud_engine.py` הישן משמש רק ל-`reproject`).
 - `models/phonikud-1.0.int8.onnx` — המודל (~294MB). `.venv/` — פייתון 3.13.
 
 תלויות (ב-.venv): `phonikud`, `phonikud-onnx`, `onnxruntime`, `pymupdf`, `python-bidi`.
@@ -89,12 +89,16 @@ IndexedDB `nikud-karyanim`: המסמך הטעון + ניקוד העמודים ש
 - PDF בשני טורים: שורות מקובצות לפי גובה בתוך בלוק; פריסות מורכבות עלולות להתערבב.
 
 ## גרסה חיה (אונליין) — מנוע דיקטה
-לגרסה החיה המנוע הוא **Nakdan של דיקטה** (`nikud_engine_dicta.py`, `NIKUD_ENGINE=dicta`) — בלי מודל מקומי,
-כך שהשרת רץ על ה-VPS של הסטודיו. דיקטה מוחזר עם `keepqq` (קמץ קטן כ-U+05C7) ו-`keepmetagim` (שמירת
-האותיות המקוריות); שווא נע והטעמה מתווספים בחוקים. פריסה: `bash deploy/deploy.sh` (rsync ל-`/opt/nakdan/app`
-ב-46.225.228.147 + `deploy/install_vps.sh`: venv, systemd `nakdan.service` על 8798, nginx עם סיסמה
-(`deploy/.password`, משתמש `pele`) ו-HTTPS. כתובת: https://nakdan.46.225.228.147.nip.io/ ; לכתובת
-nakdan.studioplaim.co.il צריך רשומת A ב-DNS (sitesdepot) → 46.225.228.147.
+כתובת: https://nakdan-karyanim-production.up.railway.app (Railway, כניסה עם שם משתמש וסיסמה/קוד אישי).
+בגרסה החיה המנוע הוא **Nakdan של דיקטה** (`nikud_engine_dicta.py`; נבחר אוטומטית כשאין מודל מקומי, או
+`NIKUD_ENGINE=dicta`). דיקטה מוחזר עם `keepqq` (קמץ קטן כ-U+05C7) ו-`keepmetagim` (שמירת האותיות המקוריות);
+שווא נע והטעמה מתווספים בחוקים.
+- **פריסה:** `git push` לענף `main` ב-GitHub (`yagil-del/nakdan-karyanim`) ← Railway בונה ופורס לבד
+  (`railway.json`, Nixpacks; `.python-version` חייב להיות `3.12` בלבד). לשם כך לאפליקציית Railway ב-GitHub
+  צריכה להיות גישה לריפו (github.com/settings/installations).
+- **אימות:** `/health` מחזיר `build` — טביעת אצבע של קובצי הממשק. אותו ערך מקומית ובאונליין = הפריסה עלתה.
+- **משתנים ב-Railway:** `NAKDAN_PASSWORD` (הבעלים), `NAKDAN_USERS` (קודים אישיים, ראו למטה).
+- השרת הישן ב-Hetzner (46.225.228.147) **אינו בשימוש ואינו של הסטודיו** — לא לפרוס אליו.
 
 ## שיתוף עם אחרים: קודים אישיים + גיבוי
 כל משתמש עובד על ספרייה משלו (הנתונים בדפדפן שלו; השרת לא שומר קבצים).
