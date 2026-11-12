@@ -22,6 +22,14 @@ const idb = (() => {
     set: (k, v) => tx('readwrite', s => s.put(v, k)).catch(() => {}),
     del: k => tx('readwrite', s => s.delete(k)).catch(() => {}),
     delPrefix: p => tx('readwrite', s => s.delete(IDBKeyRange.bound(p, p + '￿'))).catch(() => {}),
+    entries: async p => {              // [[key, value], ...] for every key that starts with p
+      const db = await open();
+      return new Promise((res, rej) => {
+        const out = [], rq = db.transaction('kv', 'readonly').objectStore('kv').openCursor(IDBKeyRange.bound(p, p + '\uffff'));
+        rq.onsuccess = () => { const c = rq.result; if (c) { out.push([c.key, c.value]); c.continue(); } else res(out); };
+        rq.onerror = () => rej(rq.error);
+      }).catch(() => []);
+    },
   };
 })();
 
@@ -447,6 +455,49 @@ function renderLibrary() {
     if (q && q.usage) $('#libFoot').textContent = `המסמכים נשמרים בדפדפן הזה, במחשב הזה · בשימוש ${(q.usage / 1048576).toFixed(1)}MB`;
   }).catch(() => {});
 }
+/* backup / restore: the whole library in one file (documents, saved nikud, edits, directions, breaths, bookmarks) */
+async function backupLibrary() {
+  if (!LIB.length) return toast('הספרייה ריקה — אין מה לגבות');
+  showBusy(true);
+  try {
+    await libSave();
+    const docs = {}, toks = {};
+    for (const [k, v] of await idb.entries('doc:')) docs[k.slice(4)] = v;
+    for (const [k, v] of await idb.entries('tok:')) toks[k.slice(4)] = v;
+    const keys = new Set(LIB.map(e => e.key)), pick = o => Object.fromEntries(Object.entries(o).filter(([k]) => keys.has(k)));
+    const data = { type: 'nikud-karyanim-backup', version: 1, saved: new Date().toISOString(), lib: LIB, docs, toks,
+      edits: pick(EDITS), notes: pick(NOTES), breaths: pick(BREATHS), prog: pick(lsGet(LSK.prog, {})) };
+    const d = new Date(), stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    download(`גיבוי-ספרייה-ניקוד-${stamp}.json`, JSON.stringify(data));
+    toast(`נשמר קובץ גיבוי עם ${LIB.length} מסמכים — שמור אותו במקום בטוח`);
+  } catch (err) { toast('הגיבוי נכשל: ' + err.message); }
+  finally { showBusy(false); }
+}
+async function restoreLibrary(file) {
+  showBusy(true);
+  try {
+    const data = JSON.parse(await file.text());
+    if (!data || data.type !== 'nikud-karyanim-backup' || !Array.isArray(data.lib)) return toast('זה לא קובץ גיבוי של הספרייה');
+    let added = 0, updated = 0;
+    for (const e of data.lib) {
+      const doc = data.docs && data.docs[e.uid]; if (!doc || !doc.pages) continue;
+      const same = LIB.filter(x => x.uid === e.uid || x.key === e.key);
+      for (const x of same) { await idb.del('doc:' + x.uid); await idb.delPrefix('tok:' + x.uid + ':'); }
+      LIB = LIB.filter(x => !same.includes(x)); LIB.push(e); same.length ? updated++ : added++;
+      await idb.set('doc:' + e.uid, doc);
+      for (const [k, v] of Object.entries(data.toks || {})) if (k.startsWith(e.uid + ':')) await idb.set('tok:' + k, v);
+      if (data.edits && data.edits[e.key]) EDITS[e.key] = data.edits[e.key];
+      if (data.notes && data.notes[e.key]) NOTES[e.key] = data.notes[e.key];
+      if (data.breaths && data.breaths[e.key]) BREATHS[e.key] = data.breaths[e.key];
+      if (data.prog && data.prog[e.key]) { const pr = lsGet(LSK.prog, {}); pr[e.key] = data.prog[e.key]; lsSet(LSK.prog, pr); }
+    }
+    lsSet(LSK.edits, EDITS); lsSet(LSK.notes, NOTES); lsSet(LSK.breaths, BREATHS);
+    await libSave(); updateLibBtn(); renderLibrary();
+    if (DOC) { TOK.clear(); refreshAll(); [state.page, state.page + 1].forEach(requestNikud); updateResume(); }
+    toast(added + updated ? `שוחזרו ${added + updated} מסמכים${updated ? ` (${updated} החליפו גרסה קיימת)` : ''}` : 'לא נמצאו מסמכים בקובץ הגיבוי');
+  } catch (err) { toast('השחזור נכשל: ' + (err.message || 'קובץ לא תקין')); }
+  finally { showBusy(false); }
+}
 function openLibrary() { hidePop(); renderLibrary(); $('#libModal').style.display = 'flex'; }
 function closeLibrary() { $('#libModal').style.display = 'none'; }
 
@@ -581,6 +632,9 @@ $('#btnImport').onclick = () => $('#fileTxt').click();
 $('#btnOpen').onclick = openLibrary;
 $('#libClose').onclick = closeLibrary;
 $('#libImport').onclick = () => { closeLibrary(); $('#fileTxt').click(); };
+$('#libBackup').onclick = backupLibrary;
+$('#libRestore').onclick = () => $('#fileBackup').click();
+$('#fileBackup').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) restoreLibrary(f); };
 $('#libModal').addEventListener('click', e => { if (e.target === $('#libModal')) closeLibrary(); });
 $('#btnSave').onclick = exportDoc;
 $('#fileTxt').onchange = async e => {
@@ -935,6 +989,7 @@ $('#inputArea').addEventListener('input', saveState);
   state.density = d; const pct = [0, 50, 100][DMAP[d]];
   $('#densFill').style.width = pct + '%'; $('#densDot').style.right = pct + '%'; $('#densFill').style.right = '0'; $('#densFill').style.left = 'auto';
   document.querySelectorAll('#densStops span').forEach(s => s.classList.toggle('on', s.dataset.d === d));
+  fetch('api/whoami').then(r => r.ok ? r.json() : null).then(j => { if (j && j.user) { $('#who').textContent = '👤 ' + j.user; $('#who').style.display = ''; } }).catch(() => {});
   LIB = (await idb.get('lib')) || [];
   const legacy = await idb.get('doc');
   if (legacy && legacy.pages) {

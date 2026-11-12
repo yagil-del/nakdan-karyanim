@@ -32,7 +32,23 @@ except Exception:
 HERE = os.path.dirname(os.path.abspath(__file__))
 PORT = int(os.environ.get('PORT', '8788'))
 HOST = os.environ.get('HOST', '0.0.0.0' if _CLOUD else '127.0.0.1')   # cloud hosting listens on all interfaces
-PASSWORD = os.environ.get('NAKDAN_PASSWORD', '')        # optional HTTP Basic Auth (user: pele)
+PASSWORD = os.environ.get('NAKDAN_PASSWORD', '')        # the owner's password (user: pele)
+
+
+def _load_users():
+    """NAKDAN_USERS = "dana:code1, yossi:code2"  — one personal code per person.
+    Remove a pair to revoke that person. NAKDAN_PASSWORD keeps working for the owner."""
+    import re
+    users = {}
+    for part in re.split(r'[,;\n]+', os.environ.get('NAKDAN_USERS', '')):
+        name, sep, code = part.strip().partition(':')
+        if sep and name.strip() and code.strip():
+            users[name.strip()] = code.strip()
+    return users
+
+
+USERS = _load_users()
+AUTH_ON = bool(PASSWORD or USERS)
 MAX_CHARS = 16000      # per nikud call; the textarea is editable so users pick a section
 
 
@@ -66,19 +82,34 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass  # quiet
 
+    user = ''
+
     def _authorized(self):
-        if not PASSWORD:
+        """HTTP Basic Auth. Personal codes (NAKDAN_USERS) are matched by name;
+        the owner password (NAKDAN_PASSWORD) is accepted under any name."""
+        if not AUTH_ON:
             return True
-        import base64
+        import base64, hmac
         h = self.headers.get('Authorization', '')
         if h.startswith('Basic '):
             try:
-                user, _, pw = base64.b64decode(h[6:]).decode('utf-8').partition(':')
-                if pw == PASSWORD:
+                raw = base64.b64decode(h[6:])
+                try:
+                    cred = raw.decode('utf-8')
+                except UnicodeDecodeError:
+                    cred = raw.decode('latin-1')
+                name, _, pw = cred.partition(':')
+                name = name.strip()
+                code = USERS.get(name) or next((c for n, c in USERS.items() if n.lower() == name.lower()), None)
+                if code and hmac.compare_digest(pw.encode('utf-8'), code.encode('utf-8')):
+                    self.user = name
+                    return True
+                if PASSWORD and hmac.compare_digest(pw.encode('utf-8'), PASSWORD.encode('utf-8')):
+                    self.user = 'pele'
                     return True
             except Exception:
                 pass
-        data = 'נדרשת סיסמה'.encode('utf-8')
+        data = 'נדרשים שם משתמש וקוד אישי'.encode('utf-8')
         self.send_response(401)
         self.send_header('WWW-Authenticate', 'Basic realm="nikud", charset="UTF-8"')
         self.send_header('Content-Type', 'text/plain; charset=utf-8')
@@ -97,6 +128,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {'ok': True, 'engine': ENGINE, 'model_ready': ready, 'build': _build()})
         if not self._authorized():
             return
+        if path == '/api/whoami':
+            return self._send(200, {'user': self.user})
         if path in ('/', '/index.html'):
             return self._serve_file('index.html', 'text/html; charset=utf-8')
         # static: only web assets that sit next to index.html
@@ -127,6 +160,8 @@ class Handler(BaseHTTPRequestHandler):
             qs = {k: v[0] for k, v in parse_qs(full.split('?', 1)[1]).items()}
         length = int(self.headers.get('Content-Length', '0') or '0')
         raw = self.rfile.read(length) if length else b''
+        if AUTH_ON:                                   # who used what (shows in the hosting logs)
+            print(f"[use] {self.user or '-'} {path} {length}b", flush=True)
 
         # --- PDF paginated extraction (for book navigation) ---
         if path == '/api/pdf_pages':
@@ -203,7 +238,7 @@ def main():
                                          E.warm(), print("המודל מוכן ✓")),
                          daemon=True).start()
     srv = ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f"נקדן לקריינים ✦ מנוע: {ENGINE} ✦ http://{HOST}:{PORT}" + (" ✦ סיסמה פעילה" if PASSWORD else ""))
+    print(f"נקדן לקריינים ✦ מנוע: {ENGINE} ✦ http://{HOST}:{PORT}" + (f" ✦ כניסה בקוד אישי ({len(USERS)} משתמשים" + (" + בעלים" if PASSWORD else "") + ")" if AUTH_ON else ""))
     print("Ctrl+C to stop.")
     try:
         srv.serve_forever()

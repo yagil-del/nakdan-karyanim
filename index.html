@@ -332,7 +332,8 @@ body.reading .readbar{display:flex}
 .libbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px}
 .libbar button{background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--txt);padding:9px 14px;font-size:13.5px}
 .libbar button:hover{border-color:var(--accent)}
-#libFoot{font-size:12px;color:var(--dim)}
+#libFoot{font-size:12px;color:var(--dim);margin-top:10px}
+.libbtns{display:flex;flex-wrap:wrap;gap:8px}
 .breath{cursor:pointer;user-select:none;margin:0 .16em;font-family:Heebo,sans-serif;font-weight:700}
 .breath.auto{color:var(--accent);opacity:.45;font-weight:500}
 .breath.man{color:#0d9488}
@@ -352,6 +353,7 @@ body.reading .readbar{display:flex}
       <button class="nav" id="navTele">🖥 טלפרומפטר</button>
       <button class="nav" id="navSettings">⚙ הגדרות</button>
       <button class="nav" id="navGuide">📖 מדריך ושיטה</button>
+      <span id="who" style="display:none;color:var(--muted);font-size:12.5px;margin-inline-start:6px" title="מחובר/ת בקוד אישי"></span>
     </nav>
     <div class="brand">
       <div style="text-align:left">
@@ -536,7 +538,8 @@ body.reading .readbar{display:flex}
     <h2>📚 הספרייה שלי</h2>
     <p class="libsub">כל קובץ שייבאת וכל טקסט שהמרת נשמרים כאן — עם הניקוד, התיקונים, ההנחיות והמקום שבו עצרת.</p>
     <div id="libList"></div>
-    <div class="libbar"><button id="libImport">⇪ ייבוא PDF / TXT חדש</button><span id="libFoot"></span></div>
+    <div class="libbar"><div class="libbtns"><button id="libImport">⇪ ייבוא PDF / TXT חדש</button><button id="libBackup" title="שומר קובץ אחד עם כל המסמכים, הניקוד, התיקונים, ההנחיות והסימניות">⬇ גיבוי הספרייה</button><button id="libRestore" title="טוען קובץ גיבוי — גם במחשב או בדפדפן אחר">⬆ שחזור מגיבוי</button><input type="file" id="fileBackup" accept=".json,application/json" hidden></div></div>
+    <div id="libFoot"></div>
   </div>
 </div>
 
